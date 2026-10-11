@@ -1,39 +1,113 @@
-# Odyssey
+# Odyssey 🧭
 
-Odyssey is a context-aware planning and focus app that turns a brain dump into a practical next action. It guides a person through **Capture -> Understand -> Plan -> Execute**, combining deterministic local planning with optional Gemini-powered suggestions.
+**Turn scattered thoughts into a clear next move.**
 
-## What It Does
+Odyssey is an AI-assisted productivity and execution application designed to help people move from an overwhelming collection of tasks and ideas to a practical plan they can act on.
 
-- Captures tasks, deadlines, available time, energy, and consistency goals.
-- Interprets free-form input into structured work items.
-- Offers deadline-focused, balanced, and consistency-focused plans.
-- Derives a concrete mission and runs a focused timer.
-- Persists authenticated users, tasks, missions, and focus sessions through Supabase.
-- Falls back to local deterministic logic when AI is unavailable.
+Instead of simply generating suggestions, Odyssey focuses on the steps between deciding what matters and actually getting it done.
 
-Odyssey is an early-stage open-source project. Interfaces and database schemas may change while the project is being developed.
+**Capture → Understand → Plan → Execute**
 
-## Stack
+Odyssey is an actively developed open-source project. Its core experience is being built and refined through iterative development.
 
-- React 19, TypeScript, and Vite
-- React Router
-- Supabase Auth, Postgres, Row Level Security, and Edge Functions
-- Google Gemini through a server-side Supabase Edge Function
-- Tailwind CSS and Oxlint
+## ✨ What Odyssey Does
 
-## Local Development
+- **Capture context:** Bring tasks, deadlines, available time, energy levels, and consistency goals into one planning workflow.
+- **Understand tasks:** Interpret free-form input and organize it into structured work items.
+- **Plan the next move:** Generate actionable plans with deadline-focused, balanced, and consistency-focused approaches.
+- **Turn plans into action:** Convert priorities into concrete missions and support focused work with an execution timer.
+- **Use AI when helpful:** Integrate optional Gemini-powered suggestions alongside deterministic local planning logic.
+- **Keep work organized:** Use Supabase-backed authentication and persistence for supported application data.
 
-Requirements: Node.js 20 or newer and npm.
+Odyssey is still evolving. Some experiences and integrations may require configuration, and features may change as the project develops.
 
-```bash
-npm install
-Copy-Item .env.example .env
-npm run dev
+## 🛠 Tech Stack
+
+| Area | Technologies |
+|---|---|
+| Frontend | React 19, TypeScript, Vite |
+| Routing | React Router |
+| Styling | Tailwind CSS |
+| Authentication and database | Supabase Auth, PostgreSQL, Row Level Security |
+| AI integration | Google Gemini through a Supabase Edge Function |
+| Code quality | Oxlint |
+| Testing | Project test suite |
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 20 or newer
+- npm
+- A Supabase project for authentication and persistence
+- A Gemini API key for AI-powered suggestions
+
+### Installation
+
+1. Clone the repository and enter the project directory.
+
+   ```bash
+   git clone https://github.com/aaliya1719/Odyssey.git
+   cd Odyssey
+   ```
+
+2. Install dependencies.
+
+   ```bash
+   npm install
+   ```
+
+3. Create a local environment file.
+
+   **Windows PowerShell:**
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   **macOS/Linux:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+4. Configure the required environment variables as described below.
+
+5. Start the development server.
+
+   ```bash
+   npm run dev
+   ```
+
+### Environment Configuration
+
+Configure the following client-side variables in `.env`:
+
+```env
+VITE_SUPABASE_URL=your-supabase-project-url
+VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 ```
 
-On macOS or Linux, use `cp .env.example .env` instead. The app starts without configured services for UI work, but authentication, persistence, and AI suggestions require Supabase configuration.
+These values connect the application to your Supabase project. Use the publishable key intended for client-side applications, with appropriate database permissions and Row Level Security policies.
 
-Available checks:
+Never put a Gemini API key, Supabase service-role key, or other server-side secret in a `VITE_` variable or commit secrets to version control.
+
+### Supabase Setup
+
+1. Create a Supabase project.
+2. Configure the environment variables listed above.
+3. Apply the database schema from [`supabase/schema.sql`](supabase/schema.sql).
+4. Deploy and configure the `suggest-mission` Edge Function using the Supabase CLI.
+5. Store `GEMINI_API_KEY` as a server-side Supabase secret.
+6. Verify the function's authentication and authorization behavior before exposing it to users.
+
+Refer to the [Supabase documentation](https://supabase.com/docs) for project configuration and deployment instructions.
+
+The interface can be explored without all integrations configured, but authentication, persistence, and AI suggestions require their respective services.
+
+## 🧪 Development Checks
+
+Run the checks supported by the repository:
 
 ```bash
 npm run build
@@ -41,44 +115,54 @@ npm run lint
 npm test
 ```
 
-## Supabase Setup
+These commands assume the corresponding scripts are defined in `package.json`. If a script is unavailable in your checkout, check the available npm scripts before running it.
 
-1. Create a Supabase project.
-2. Copy the project URL and publishable key into `.env` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-3. Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL editor.
-4. Deploy the AI function:
-
-   ```bash
-   supabase functions deploy suggest-mission --no-verify-jwt
-   supabase secrets set GEMINI_API_KEY=your-gemini-api-key
-   ```
-
-The Gemini key must remain a Supabase secret. Never expose it through a `VITE_` variable or commit it to the repository. The browser only receives the Supabase publishable/anon key.
-
-The optional integration smoke test uses the same variables:
-
-```bash
-node test-both.mjs
-```
-
-It requires a deployed function and makes live requests, so it is not part of the default unit-test suite.
-
-## Repository Layout
+## 📁 Project Structure
 
 ```text
-src/components/   Shared UI and landing-page sections
-src/hooks/        Auth, theme, reveal, and timer hooks
-src/lib/          Deterministic interpreter, planner, and domain types
-src/pages/        Route-level application screens
-src/services/     Supabase-backed application services
-supabase/         Database schema and Edge Functions
-tests/            Automated unit tests
+src/
+├── components/    Shared UI components and landing-page sections
+├── hooks/         Authentication, theme, reveal, and timer hooks
+├── lib/           Planning logic, interpreter, and domain types
+├── pages/         Route-level application screens
+└── services/      Application services and Supabase integration
+
+supabase/
+├── schema.sql     Database schema
+└── functions/     Edge Functions
+
+tests/             Automated tests
 ```
 
-## Contributing
+## 🗺️ Current Development Focus
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development expectations and pull-request guidance. Please review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) before participating.
+Odyssey is being developed incrementally. Areas for continued improvement include:
 
-## License
+- Making the planning and prioritization experience clearer.
+- Refining the transition from a plan to an executable mission.
+- Improving navigation and interface consistency, including theme support.
+- Strengthening progress tracking and persistence.
+- Improving accessibility and automated test coverage.
+- Evaluating AI suggestions for reliability and usefulness.
 
-Odyssey is released under the [Apache License 2.0](LICENSE).
+These are development directions, not a claim that every item is already implemented.
+
+## 🤝 Contributing
+
+Contributions to code, documentation, testing, accessibility, design, and product feedback are welcome.
+
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup instructions and contribution guidelines. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md).
+
+For substantial changes, open or discuss an issue before beginning implementation.
+
+## 🔐 Security
+
+Please report suspected vulnerabilities privately rather than posting sensitive details in a public issue. See [`SECURITY.md`](SECURITY.md) for reporting guidance.
+
+## 📄 License
+
+Odyssey is licensed under the [Apache License 2.0](LICENSE).
+
+---
+
+Built and maintained by [Aaliya](https://github.com/aaliya1719).
