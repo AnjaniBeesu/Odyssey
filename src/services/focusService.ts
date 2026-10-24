@@ -54,6 +54,21 @@ export const focusService = {
     return data as FocusSession;
   },
 
+  // Compensation for a mission transition that fails after ending its session.
+  async reopenSession(id: string): Promise<FocusSession> {
+    const user = await getUser();
+    if (!user) return Promise.resolve(localSessions.reopen(id));
+
+    const { data, error } = await supabase
+      .from('focus_sessions')
+      .update({ ended_at: null, duration_minutes: null, completed: false })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as FocusSession;
+  },
+
   async getSessionsForMission(missionId: string): Promise<FocusSession[]> {
     const user = await getUser();
     if (!user) return Promise.resolve(localSessions.getForMission(missionId));
