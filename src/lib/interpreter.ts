@@ -169,19 +169,45 @@ function cleanTitle(text: string): string {
 
 /**
  * Split free-form input into individual clauses.
- * Handles: comma lists, "and" conjunctions, semicolons, sentence boundaries.
+ * Handles: comma lists, "and" between multi-word phrases, semicolons, sentence boundaries.
  */
-function splitClauses(input: string): string[] {
+export function splitClauses(input: string): string[] {
   // Normalise line breaks
   const normalised = input.replace(/\r?\n/g, ', ');
 
-  // Split on: comma, semicolon, period (if followed by space+capital), " and "
-  const raw = normalised
-    .split(/,\s*|\s*;\s*|\s+and\s+|\.\s+(?=[A-Z])/)
+  // Hard boundaries: comma, semicolon, sentence end (period + space + capital)
+  const segments = normalised.split(/,\s*|\s*;\s*|\.\s+(?=[A-Z])/);
+
+  // "and" only separates tasks when both sides are phrases of 2+ words.
+  // This keeps titles like "Research and Development proposal" or "Q and A prep" intact.
+  return segments
+    .flatMap(splitOnAnd)
     .map(s => s.trim())
     .filter(s => s.length > 2);
+}
 
-  return raw;
+const MIN_WORDS_PER_SIDE = 2;
+
+function splitOnAnd(segment: string): string[] {
+  const words = segment.trim().split(/\s+/);
+  const parts: string[] = [];
+  let current: string[] = [];
+
+  words.forEach((word, i) => {
+    const remaining = words.length - i - 1;
+    if (
+      word.toLowerCase() === 'and' &&
+      current.length >= MIN_WORDS_PER_SIDE &&
+      remaining >= MIN_WORDS_PER_SIDE
+    ) {
+      parts.push(current.join(' '));
+      current = [];
+    } else {
+      current.push(word);
+    }
+  });
+  if (current.length) parts.push(current.join(' '));
+  return parts;
 }
 
 // ─── Category assignment ─────────────────────────────────────────────────────
