@@ -25,11 +25,6 @@ export interface InterpretedItem {
   isoDeadline?: string;        // ISO string for taskService, if deadline resolved
 }
 
-export interface InterpretationResult {
-  items: InterpretedItem[];
-  rawInput: string;
-}
-
 // ─── Deadline detection ───────────────────────────────────────────────────────
 
 /** Day-name patterns and their offsets from today (0 = same weekday ahead) */
@@ -86,13 +81,12 @@ function parseDeadline(text: string): DeadlineParse | null {
     d.setDate(d.getDate() + 7);
     return { label: 'next week', date: d };
   }
-  // "next <dayname>" — explicit "next Monday"
+  // "next <dayname>" — the next occurrence of that weekday, not an extra week later.
+  // If today is the named weekday, "next" means seven days from today.
   const nextDayMatch = lower.match(/\bnext\s+(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/);
   if (nextDayMatch) {
     const dayNum = DAY_NAMES[nextDayMatch[1]];
     const d = nextWeekdayDate(dayNum);
-    // push one more week to enforce "next" semantics
-    d.setDate(d.getDate() + 7);
     const label = 'next ' + nextDayMatch[1].charAt(0).toUpperCase() + nextDayMatch[1].slice(1, 3);
     return { label, date: d };
   }
