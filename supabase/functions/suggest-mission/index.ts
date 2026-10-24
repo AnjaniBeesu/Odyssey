@@ -361,24 +361,51 @@ function validateInterpretation(parsed: unknown): boolean {
   });
 }
 
-function validatePlans(parsed: unknown): boolean {
+function validatePlans(parsed: unknown, expectedItems: PlanRequest['items']): boolean {
   if (typeof parsed !== 'object' || parsed === null) return false;
   const p = parsed as Record<string, unknown>;
   if (!Array.isArray(p.plans) || p.plans.length !== 3) return false;
+
   const expectedIds = new Set(['deadline', 'balanced', 'consistency']);
+  const expectedTaskTexts = new Set(expectedItems.map((item) => item.text.trim()));
+  const seenPlanIds = new Set<string>();
+
   return p.plans.every((plan: unknown) => {
     if (typeof plan !== 'object' || plan === null) return false;
     const pl = plan as Record<string, unknown>;
-    return (
-      expectedIds.has(pl.id as string) &&
-      typeof pl.name === 'string' &&
-      typeof pl.tagline === 'string' &&
-      typeof pl.whyThisApproach === 'string' &&
-      Array.isArray(pl.orderedItems) && (pl.orderedItems as unknown[]).length > 0 &&
-      typeof pl.timeEstimate === 'string' &&
-      typeof pl.tradeoff === 'string'
-    );
-  });
+    const id = pl.id as string;
+    if (!expectedIds.has(id) || seenPlanIds.has(id)) return false;
+    seenPlanIds.add(id);
+
+    if (
+      typeof pl.name !== 'string' || !pl.name.trim() ||
+      typeof pl.tagline !== 'string' || !pl.tagline.trim() ||
+      typeof pl.whyThisApproach !== 'string' || !pl.whyThisApproach.trim() ||
+      typeof pl.timeEstimate !== 'string' || !pl.timeEstimate.trim() ||
+      typeof pl.tradeoff !== 'string' || !pl.tradeoff.trim() ||
+      !Array.isArray(pl.orderedItems)
+    ) return false;
+
+    const orderedItems = pl.orderedItems as unknown[];
+    if (orderedItems.length !== expectedTaskTexts.size) return false;
+    const seenTasks = new Set<string>();
+
+    for (const item of orderedItems) {
+      if (typeof item !== 'object' || item === null) return false;
+      const entry = item as Record<string, unknown>;
+      if (
+        typeof entry.text !== 'string' || !entry.text.trim() ||
+        typeof entry.rationale !== 'string' || !entry.rationale.trim() ||
+        !['urgent', 'high', 'medium', 'low'].includes(entry.priority as string)
+      ) return false;
+
+      const taskText = entry.text.trim();
+      if (!expectedTaskTexts.has(taskText) || seenTasks.has(taskText)) return false;
+      seenTasks.add(taskText);
+    }
+
+    return seenTasks.size === expectedTaskTexts.size;
+  }) && seenPlanIds.size === expectedIds.size;
 }
 
 function validateMission(parsed: unknown): boolean {
@@ -489,9 +516,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!validatePlans(parsed)) {
+    if (!validatePlans(parsed, r.items)) {
       console.error('plan validation fail:', JSON.stringify(parsed).slice(0, 200));
-      return new Response(JSON.stringify({ error: 'Invalid plans shape' }), {
+      return new Response(JSON.stringify({ error: 'Invalid or incomplete plans: each approach must include every input task exactly once with valid fields.' }), {
         status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
@@ -528,7 +555,7 @@ Deno.serve(async (req: Request) => {
 
     if (!validateMission(parsed)) {
       console.error('mission validation fail:', JSON.stringify(parsed).slice(0, 200));
-      return new Response(JSON.stringify({ error: 'Invalid mission shape' }), {
+      return new Response(JSON.stringify({ error: 'Invalid mission: required text fields must be non-empty and planned_minutes must be one of 25, 30, 45, 50, 60, or 90.' }), {
         status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }

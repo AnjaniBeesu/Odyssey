@@ -30,6 +30,9 @@ export interface InterpretationResult {
   rawInput: string;
 }
 
+// ─── Deadline detection ───────────────────────────────────────────────────────
+
+/** Day-name patterns and their offsets from today (0 = same weekday ahead) */
 const DAY_NAMES: Record<string, number> = {
   sunday: 0, sun: 0,
   monday: 1, mon: 1,
@@ -92,6 +95,12 @@ function parseDeadline(text: string, referenceDate: Date): DeadlineParse | null 
   if (nextDayMatch) {
     const dayNum = DAY_NAMES[nextDayMatch[1]];
     const d = nextWeekdayDate(dayNum, today);
+  // "next <dayname>" — the next occurrence of that weekday, not an extra week later.
+  // If today is the named weekday, "next" means seven days from today.
+  const nextDayMatch = lower.match(/\bnext\s+(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/);
+  if (nextDayMatch) {
+    const dayNum = DAY_NAMES[nextDayMatch[1]];
+    const d = nextWeekdayDate(dayNum);
     const label = 'next ' + nextDayMatch[1].charAt(0).toUpperCase() + nextDayMatch[1].slice(1, 3);
     return { label, date: d };
   }
@@ -154,6 +163,49 @@ function splitClauses(input: string): string[] {
     .split(/,\s*|\s*;\s*|\s+and\s+|\.\s+(?=[A-Z])/)
     .map(s => s.trim())
     .filter(s => s.length > 2);
+// ─── Sentence / clause splitting ─────────────────────────────────────────────
+
+/**
+ * Split free-form input into individual clauses.
+ * Handles: comma lists, "and" between multi-word phrases, semicolons, sentence boundaries.
+ */
+export function splitClauses(input: string): string[] {
+  // Normalise line breaks
+  const normalised = input.replace(/\r?\n/g, ', ');
+
+  // Hard boundaries: comma, semicolon, sentence end (period + space + capital)
+  const segments = normalised.split(/,\s*|\s*;\s*|\.\s+(?=[A-Z])/);
+
+  // "and" only separates tasks when both sides are phrases of 2+ words.
+  // This keeps titles like "Research and Development proposal" or "Q and A prep" intact.
+  return segments
+    .flatMap(splitOnAnd)
+    .map(s => s.trim())
+    .filter(s => s.length > 2);
+}
+
+const MIN_WORDS_PER_SIDE = 2;
+
+function splitOnAnd(segment: string): string[] {
+  const words = segment.trim().split(/\s+/);
+  const parts: string[] = [];
+  let current: string[] = [];
+
+  words.forEach((word, i) => {
+    const remaining = words.length - i - 1;
+    if (
+      word.toLowerCase() === 'and' &&
+      current.length >= MIN_WORDS_PER_SIDE &&
+      remaining >= MIN_WORDS_PER_SIDE
+    ) {
+      parts.push(current.join(' '));
+      current = [];
+    } else {
+      current.push(word);
+    }
+  });
+  if (current.length) parts.push(current.join(' '));
+  return parts;
 }
 
 function assignCategory(text: string, deadline: DeadlineParse | null, referenceDate: Date): ItemCategory {

@@ -22,4 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-open_source_issues_suggestions.txt
+
+# Test and coverage output
+coverage

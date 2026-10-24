@@ -225,6 +225,21 @@ export const localSessions = {
     save(KEYS.sessions, sessions);
     return updated;
   },
+
+  reopen(id: string): FocusSession {
+    const sessions = load<FocusSession>(KEYS.sessions);
+    const idx = sessions.findIndex(s => s.id === id);
+    if (idx === -1) throw new Error(`Session ${id} not found`);
+    const updated: FocusSession = {
+      ...sessions[idx],
+      ended_at: null,
+      duration_minutes: null,
+      completed: false,
+    };
+    sessions[idx] = updated;
+    save(KEYS.sessions, sessions);
+    return updated;
+  },
 };
 
 // ─── Utility: clear all local data (useful for "sign in to save" flow) ────────
