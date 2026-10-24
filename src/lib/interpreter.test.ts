@@ -44,3 +44,47 @@ test('next Friday on Friday resolves to the following Friday', () => {
   const item = deadlineFor('Finish report next Friday', '2026-10-23T10:00:00.000Z');
   assert.equal(item.isoDeadline, '2026-10-30T23:59:00.000Z');
 });
+
+
+// Explicit "next <weekday>" always means the strictly next occurrence.
+// Cover every weekday both when it is upcoming and when today is that weekday.
+const weekdays = [
+  { name: 'Sunday', day: 0 },
+  { name: 'Monday', day: 1 },
+  { name: 'Tuesday', day: 2 },
+  { name: 'Wednesday', day: 3 },
+  { name: 'Thursday', day: 4 },
+  { name: 'Friday', day: 5 },
+  { name: 'Saturday', day: 6 },
+];
+
+function utcDateForWeekday(day: number) {
+  // 2026-10-19 is a Monday; use midday UTC to avoid timezone boundary issues.
+  return new Date(Date.UTC(2026, 9, 19 + day, 12, 0, 0));
+}
+
+for (const target of weekdays) {
+  test(`next ${target.name} entered on ${target.name} means one week later`, () => {
+    const reference = utcDateForWeekday(target.day);
+    const item = deadlineFor(`Finish report next ${target.name}`, reference.toISOString());
+    const expected = new Date(reference);
+    expected.setDate(expected.getDate() + 7);
+    expected.setHours(23, 59, 0, 0);
+    assert.equal(item.isoDeadline, expected.toISOString());
+  });
+}
+
+for (const current of weekdays) {
+  for (const target of weekdays) {
+    if (current.day === target.day) continue;
+    test(`next ${target.name} entered on ${current.name} resolves to the next occurrence`, () => {
+      const reference = utcDateForWeekday(current.day);
+      const item = deadlineFor(`Finish report next ${target.name}`, reference.toISOString());
+      const expected = new Date(reference);
+      const diff = (target.day - current.day + 7) % 7;
+      expected.setDate(expected.getDate() + diff);
+      expected.setHours(23, 59, 0, 0);
+      assert.equal(item.isoDeadline, expected.toISOString());
+    });
+  }
+}
