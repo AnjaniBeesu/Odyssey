@@ -1,4 +1,4 @@
-/**
+/** 
  * Odyssey Input Interpreter
  *
  * Deterministic, client-side natural-language analysis.
@@ -40,6 +40,11 @@ const DAY_NAMES: Record<string, number> = {
   saturday: 6, sat: 6,
 };
 
+/**
+ * Return the next occurrence of a weekday.
+ * A bare weekday may include today; explicit "next <weekday>" must be
+ * strictly after today, so "next Monday" entered on Monday means +7 days.
+ */
 function nextWeekdayDate(targetDay: number, referenceDate: Date, includeToday = false): Date {
   const today = new Date(referenceDate);
   today.setHours(23, 59, 0, 0);
