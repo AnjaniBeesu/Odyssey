@@ -83,21 +83,11 @@ export function useMissionTimer(mission: Mission | null, onMissionUpdate: (missi
   const pause = async () => {
     if (!mission) return;
     setRunning(false);
-    let endedSession: FocusSession | null = null;
-    try {
-      if (session) endedSession = await focusService.endSession(session.id, false);
-      const updatedMission = await missionService.pauseMission(mission.id);
-      onMissionUpdate(updatedMission);
-      await refresh();
-    } catch (error) {
-      // Keep the mission active if pausing could not finish; restore its open session.
-      if (endedSession) {
-        const reopened = await focusService.reopenSession(endedSession.id);
-        setSession(reopened);
-        setRunning(true);
-      }
-      throw error;
-    }
+    const updatedMission = await focusService.transitionMissionTimer(
+      mission.id, session?.id ?? null, 'pause',
+    );
+    onMissionUpdate(updatedMission);
+    await refresh();
   };
 
   const resume = async () => {
@@ -114,20 +104,12 @@ export function useMissionTimer(mission: Mission | null, onMissionUpdate: (missi
     if (!mission) return;
     setEnding(true);
     setRunning(false);
-    let endedSession: FocusSession | null = null;
     try {
-      if (session) endedSession = await focusService.endSession(session.id, true);
-      const updatedMission = await missionService.completeMission(mission.id);
+      const updatedMission = await focusService.transitionMissionTimer(
+        mission.id, session?.id ?? null, 'complete',
+      );
       onMissionUpdate(updatedMission);
       await refresh();
-    } catch (error) {
-      // A failed completion must not leave an active mission without its timer session.
-      if (endedSession) {
-        const reopened = await focusService.reopenSession(endedSession.id);
-        setSession(reopened);
-        setRunning(true);
-      }
-      throw error;
     } finally {
       setEnding(false);
     }
