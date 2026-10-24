@@ -83,8 +83,9 @@ export function useMissionTimer(mission: Mission | null, onMissionUpdate: (missi
   const pause = async () => {
     if (!mission) return;
     setRunning(false);
-    if (session) await focusService.endSession(session.id, false);
-    const updatedMission = await missionService.pauseMission(mission.id);
+    const updatedMission = await focusService.transitionMissionTimer(
+      mission.id, session?.id ?? null, 'pause',
+    );
     onMissionUpdate(updatedMission);
     await refresh();
   };
@@ -104,8 +105,9 @@ export function useMissionTimer(mission: Mission | null, onMissionUpdate: (missi
     setEnding(true);
     setRunning(false);
     try {
-      if (session) await focusService.endSession(session.id, true);
-      const updatedMission = await missionService.completeMission(mission.id);
+      const updatedMission = await focusService.transitionMissionTimer(
+        mission.id, session?.id ?? null, 'complete',
+      );
       onMissionUpdate(updatedMission);
       await refresh();
     } finally {
