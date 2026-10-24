@@ -1,9 +1,9 @@
-/**
+/** 
  * Odyssey Input Interpreter
  *
  * Deterministic, client-side natural-language analysis.
  * No external API required. Parses free-text capture input into structured
- * InterpretedItems that can be shown to the user and saved as Tasks.
+ * InterpretedItems that can be shown to the user and saved as Tasks
  */
 
 import type { TaskPriority } from '../types/database';
@@ -19,10 +19,15 @@ export type ItemCategory =
 export interface InterpretedItem {
   text: string;
   category: ItemCategory;
-  deadlineLabel?: string;      // human-readable, e.g. "Friday", "next Monday"
-  deadlineDate?: Date;         // resolved absolute date for sorting
+  deadlineLabel?: string;
+  deadlineDate?: Date;
   priority: TaskPriority;
-  isoDeadline?: string;        // ISO string for taskService, if deadline resolved
+  isoDeadline?: string;
+}
+
+export interface InterpretationResult {
+  items: InterpretedItem[];
+  rawInput: string;
 }
 
 // ─── Deadline detection ───────────────────────────────────────────────────────
@@ -38,12 +43,17 @@ const DAY_NAMES: Record<string, number> = {
   saturday: 6, sat: 6,
 };
 
-function nextWeekdayDate(targetDay: number): Date {
-  const today = new Date();
+/**
+ * Return the next occurrence of a weekday.
+ * A bare weekday may include today; explicit "next <weekday>" must be
+ * strictly after today, so "next Monday" entered on Monday means +7 days.
+ */
+function nextWeekdayDate(targetDay: number, referenceDate: Date, includeToday = false): Date {
+  const today = new Date(referenceDate);
   today.setHours(23, 59, 0, 0);
-  const current = today.getDay(); // 0=Sun
+  const current = today.getDay();
   let diff = targetDay - current;
-  if (diff <= 0) diff += 7;       // always the NEXT occurrence
+  if (diff < 0 || (diff === 0 && !includeToday)) diff += 7;
   const d = new Date(today);
   d.setDate(d.getDate() + diff);
   return d;
@@ -54,33 +64,37 @@ interface DeadlineParse {
   date: Date;
 }
 
-function parseDeadline(text: string): DeadlineParse | null {
+function parseDeadline(text: string, referenceDate: Date): DeadlineParse | null {
   const lower = text.toLowerCase();
-  const today = new Date();
+  const today = new Date(referenceDate);
   today.setHours(23, 59, 0, 0);
 
-  // "today"
   if (/\btoday\b/.test(lower)) {
     return { label: 'today', date: today };
   }
-  // "tomorrow"
   if (/\btomorrow\b/.test(lower)) {
     const d = new Date(today);
     d.setDate(d.getDate() + 1);
     return { label: 'tomorrow', date: d };
   }
-  // "this week" / "by end of week" / "end of week"
   if (/\bthis\s+week\b|\bend\s+of\s+(the\s+)?week\b/.test(lower)) {
-    // treat as Friday of current week
-    const d = nextWeekdayDate(5);
+    // The app treats Friday as the end of the current week. On Saturday or
+    // Sunday, that Friday has already passed; don't roll into next week.
+    const day = today.getDay();
+    const offset = day === 0 ? -2 : day === 6 ? -1 : 5 - day;
+    const d = new Date(today);
+    d.setDate(d.getDate() + offset);
     return { label: 'this week', date: d };
   }
-  // "next week"
   if (/\bnext\s+week\b/.test(lower)) {
     const d = new Date(today);
     d.setDate(d.getDate() + 7);
     return { label: 'next week', date: d };
   }
+  const nextDayMatch = lower.match(/\bnext\s+(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/);
+  if (nextDayMatch) {
+    const dayNum = DAY_NAMES[nextDayMatch[1]];
+    const d = nextWeekdayDate(dayNum, today);
   // "next <dayname>" — the next occurrence of that weekday, not an extra week later.
   // If today is the named weekday, "next" means seven days from today.
   const nextDayMatch = lower.match(/\bnext\s+(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/);
@@ -90,15 +104,13 @@ function parseDeadline(text: string): DeadlineParse | null {
     const label = 'next ' + nextDayMatch[1].charAt(0).toUpperCase() + nextDayMatch[1].slice(1, 3);
     return { label, date: d };
   }
-  // bare day name — "due Friday", "by Monday", "on Tuesday", or just "Friday"
   const dayMatch = lower.match(/\b(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/);
   if (dayMatch) {
     const dayNum = DAY_NAMES[dayMatch[1]];
-    const d = nextWeekdayDate(dayNum);
+    const d = nextWeekdayDate(dayNum, today, true);
     const label = dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1, 3);
     return { label, date: d };
   }
-  // "in X days/weeks"
   const inDaysMatch = lower.match(/\bin\s+(\d+)\s+(day|days)\b/);
   if (inDaysMatch) {
     const n = parseInt(inDaysMatch[1], 10);
@@ -113,36 +125,22 @@ function parseDeadline(text: string): DeadlineParse | null {
     d.setDate(d.getDate() + n * 7);
     return { label: `in ${n} week${n === 1 ? '' : 's'}`, date: d };
   }
-
   return null;
 }
 
-// ─── Priority detection ───────────────────────────────────────────────────────
-
 function parsePriority(text: string): TaskPriority {
   const lower = text.toLowerCase();
-  if (/\b(urgent|asap|critical|emergency|immediately|right away|must\s+do|need\s+to\s+do\s+now)\b/.test(lower)) {
-    return 'urgent';
-  }
-  if (/\b(important|high\s+priority|really\s+need|crucial|significant|key|major)\b/.test(lower)) {
-    return 'high';
-  }
-  if (/\b(keep|continue|ongoing|habit|practice|learning|study|explore|read|want\s+to)\b/.test(lower)) {
-    return 'low';
-  }
+  if (/\b(urgent|asap|critical|emergency|immediately|right away|must\s+do|need\s+to\s+do\s+now)\b/.test(lower)) return 'urgent';
+  if (/\b(important|high\s+priority|really\s+need|crucial|significant|key|major)\b/.test(lower)) return 'high';
+  if (/\b(keep|continue|ongoing|habit|practice|learning|study|explore|read|want\s+to)\b/.test(lower)) return 'low';
   return 'medium';
 }
-
-// ─── Goal/habit detection ─────────────────────────────────────────────────────
 
 function isOngoingGoal(text: string): boolean {
   const lower = text.toLowerCase();
   return /\b(keep|continue|ongoing|habit|practice|learning|study|explore|read|want\s+to|trying\s+to|working\s+on|improve|get\s+better|build|develop|maintain)\b/.test(lower);
 }
 
-// ─── Text cleaning ─────────────────────────────────────────────────────────────
-
-/** Remove deadline/qualifier phrases to get a cleaner task title */
 function cleanTitle(text: string): string {
   return text
     .replace(/\b(due|by|on|before|for|until|at|around)\s+(next\s+)?(sunday|sun|monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat)\b/gi, '')
@@ -159,6 +157,12 @@ function cleanTitle(text: string): string {
     .trim();
 }
 
+function splitClauses(input: string): string[] {
+  const normalised = input.replace(/\r?\n/g, ', ');
+  return normalised
+    .split(/,\s*|\s*;\s*|\s+and\s+|\.\s+(?=[A-Z])/)
+    .map(s => s.trim())
+    .filter(s => s.length > 2);
 // ─── Sentence / clause splitting ─────────────────────────────────────────────
 
 /**
@@ -204,32 +208,19 @@ function splitOnAnd(segment: string): string[] {
   return parts;
 }
 
-// ─── Category assignment ─────────────────────────────────────────────────────
-
-function assignCategory(
-  text: string,
-  deadline: DeadlineParse | null,
-): ItemCategory {
-  if (!deadline) {
-    return isOngoingGoal(text) ? 'goal' : 'task';
-  }
-  const daysAway = Math.ceil(
-    (deadline.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
+function assignCategory(text: string, deadline: DeadlineParse | null, referenceDate: Date): ItemCategory {
+  if (!deadline) return isOngoingGoal(text) ? 'goal' : 'task';
+  const daysAway = Math.ceil((deadline.date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
   return daysAway <= 7 ? 'deadline' : 'upcoming';
 }
 
-// ─── Main interpreter ─────────────────────────────────────────────────────────
-
-export function interpret(rawInput: string): InterpretationResult {
+export function interpret(rawInput: string, referenceDate = new Date()): InterpretationResult {
   const clauses = splitClauses(rawInput);
-
   const items: InterpretedItem[] = clauses.map((clause): InterpretedItem => {
-    const deadline = parseDeadline(clause);
+    const deadline = parseDeadline(clause, referenceDate);
     const priority = parsePriority(clause);
-    const category = assignCategory(clause, deadline);
+    const category = assignCategory(clause, deadline, referenceDate);
     const cleanedTitle = cleanTitle(clause);
-
     return {
       text: cleanedTitle || clause.trim(),
       category,
@@ -239,24 +230,12 @@ export function interpret(rawInput: string): InterpretationResult {
       isoDeadline: deadline?.date?.toISOString(),
     };
   });
-
-  // Sort: deadline (nearest first) → upcoming → task → goal
-  const ORDER: Record<ItemCategory, number> = {
-    deadline: 0,
-    upcoming: 1,
-    task: 2,
-    goal: 3,
-  };
-
+  const ORDER: Record<ItemCategory, number> = { deadline: 0, upcoming: 1, task: 2, goal: 3 };
   items.sort((a, b) => {
     const orderDiff = ORDER[a.category] - ORDER[b.category];
     if (orderDiff !== 0) return orderDiff;
-    // Within same category, sort by deadline proximity
-    if (a.deadlineDate && b.deadlineDate) {
-      return a.deadlineDate.getTime() - b.deadlineDate.getTime();
-    }
+    if (a.deadlineDate && b.deadlineDate) return a.deadlineDate.getTime() - b.deadlineDate.getTime();
     return 0;
   });
-
   return { items, rawInput };
 }
